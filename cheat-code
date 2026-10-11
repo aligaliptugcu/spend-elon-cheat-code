@@ -1,0 +1,132 @@
+
+(() => {
+  let el = document.querySelector(".spend-elon");
+
+  while (el && !el.__vue__?.$data?.owned) {
+    el = el.parentElement;
+  }
+
+  const vm = el?.__vue__;
+  if (!vm) return;
+
+  document.querySelector("#custom-buy-panel")?.remove();
+
+  const panel = document.createElement("div");
+  panel.id = "custom-buy-panel";
+  panel.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 999999;
+    width: 270px;
+    padding: 14px;
+    background: #222;
+    color: white;
+    border-radius: 10px;
+    font: 14px sans-serif;
+    box-shadow: 0 4px 16px #0006;
+  `;
+
+  const title = document.createElement("div");
+  title.textContent = "Custom Item Amount";
+  title.style.cssText =
+    "font-weight:bold;margin-bottom:10px;font-size:16px";
+
+  const select = document.createElement("select");
+  select.style.cssText =
+    "box-sizing:border-box;width:100%;padding:8px;margin-bottom:8px";
+
+  vm.shopItems.forEach((item, index) => {
+    const option = document.createElement("option");
+    option.value = index;
+    option.textContent = `${item.name} — ${item.priceText}`;
+    select.appendChild(option);
+  });
+
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "0";
+  input.step = "1";
+  input.value = "1000";
+  input.placeholder = "Enter target amount";
+  input.style.cssText =
+    "box-sizing:border-box;width:100%;padding:8px;margin-bottom:8px";
+
+  const apply = document.createElement("button");
+  apply.textContent = "Set Amount";
+  apply.style.cssText = `
+    width:100%;
+    padding:9px;
+    cursor:pointer;
+    border:0;
+    border-radius:5px;
+    background:#f5f5f5;
+    color:#111;
+    font-weight:bold;
+  `;
+
+  apply.onclick = () => {
+    const item = vm.shopItems[Number(select.value)];
+    const rawValue = input.value.trim();
+
+    if (!item || rawValue === "") return;
+
+    const target = Number(rawValue);
+    if (!Number.isSafeInteger(target) || target < 0) return;
+
+    const current = vm.owned[item.id] || 0;
+    const difference = target - current;
+
+    if (difference === 0) return;
+
+    if (difference > 0) {
+      const cost = difference * item.price;
+      if (!Number.isSafeInteger(cost)) return;
+
+      const previousBalance = vm.balance;
+      const previousDisplayed = vm.displayed;
+
+      vm.balance = Math.max(vm.balance, cost);
+      vm.displayed = vm.balance;
+      vm.balanceSettled = true;
+
+      const fakeButton = document.createElement("button");
+      document.body.appendChild(fakeButton);
+
+      try {
+        vm.$options.methods.buy.call(vm, item, difference, {
+          currentTarget: fakeButton
+        });
+      } catch {
+        vm.balance = previousBalance;
+        vm.displayed = previousDisplayed;
+        return;
+      } finally {
+        fakeButton.remove();
+      }
+    } else {
+      vm.$set(vm.owned, item.id, target);
+      vm.scene?.update(vm.owned, item.id);
+      vm.scene?.loadArt(item);
+    }
+
+    vm.$forceUpdate();
+  };
+
+  const close = document.createElement("button");
+  close.textContent = "Close";
+  close.style.cssText = `
+    width:100%;
+    padding:7px;
+    margin-top:6px;
+    cursor:pointer;
+    border:1px solid #666;
+    border-radius:5px;
+    background:transparent;
+    color:white;
+  `;
+  close.onclick = () => panel.remove();
+
+  panel.append(title, select, input, apply, close);
+  document.body.appendChild(panel);
+})();
